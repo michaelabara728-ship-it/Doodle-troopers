@@ -1,0 +1,6 @@
+{
+  "name": "Battle Toon: 2D Arena Shooter",
+  "description": "Fast-paced 2D multiplayer cartoon arena shooter with jetpacks, weapons, and real-time battles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
