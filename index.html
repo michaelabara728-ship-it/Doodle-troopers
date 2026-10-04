@@ -1,24 +1,1628 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="screen-orientation" content="landscape" />
-    <title>Battle Toon: 2D Arena Shooter</title>
-    <meta name="description" content="Fast-paced 2D multiplayer cartoon arena shooter with jetpacks, weapons, and real-time battles." />
-    <meta property="og:title" content="Battle Toon: 2D Arena Shooter" />
-    <meta property="og:description" content="Fast-paced 2D multiplayer cartoon arena shooter with jetpacks, weapons, and real-time battles." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
-  </head>
-  <body class="bg-slate-950 text-white overflow-hidden select-none touch-none m-0 p-0 w-screen h-screen">
-    <div id="root" class="w-full h-full"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Battle Toon: 2D Arena Shooter</title>
+  <meta name="description" content="Fast-paced 2D multiplayer cartoon arena shooter with jetpacks, weapons, and real-time battles." />
+  <meta property="og:title" content="Battle Toon: 2D Arena Shooter" />
+  <meta property="og:description" content="Fast-paced 2D multiplayer cartoon arena shooter with jetpacks, weapons, and real-time battles." />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #020617; font-family: system-ui, -apple-system, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; color: #fff; }
+    #gameCanvas { display: block; width: 100vw; height: 100vh; position: absolute; inset: 0; background: #020617; }
+    
+    /* UI Overlay */
+    #uiLayer { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 12px; }
+    .interactive { pointer-events: auto; }
+    
+    /* Top Bar */
+    .top-bar { display: flex; justify-content: space-between; align-items: flex-start; width: 100%; }
+    .top-left, .top-right { display: flex; align-items: center; gap: 8px; }
+    
+    /* Badges & Buttons */
+    .hud-card { background: rgba(15, 23, 42, 0.88); border: 2px solid rgba(51, 65, 85, 0.8); border-radius: 16px; padding: 8px 12px; backdrop-filter: blur(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 10px; }
+    .hud-btn { background: rgba(15, 23, 42, 0.9); border: 2px solid #38bdf8; color: #38bdf8; border-radius: 14px; padding: 6px 10px; font-weight: 900; font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); text-transform: uppercase; }
+    .hud-btn:active { transform: scale(0.92); }
+    .hud-btn span.label { font-size: 8px; color: #94a3b8; }
+    
+    /* Health & Fuel Bars */
+    .bar-wrap { display: flex; flex-direction: column; gap: 2px; width: 110px; }
+    .bar-header { display: flex; justify-content: space-between; font-size: 9px; font-weight: 900; }
+    .bar-bg { width: 100%; height: 8px; background: #020617; border-radius: 9999px; overflow: hidden; border: 1px solid rgba(255,255,255,0.15); padding: 1px; }
+    .bar-fill { height: 100%; border-radius: 9999px; transition: width 0.1s linear; }
+    .hp-fill { background: linear-gradient(90deg, #9333ea, #c084fc); }
+    .fuel-fill { background: linear-gradient(90deg, #0284c7, #38bdf8); }
+    
+    /* Kill Feed */
+    #killFeed { display: flex; flex-direction: column; gap: 4px; align-items: center; pointer-events: none; }
+    .kill-item { background: rgba(15, 23, 42, 0.88); border: 1px solid #ef4444; border-radius: 8px; padding: 3px 8px; font-size: 10px; font-weight: 800; animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
+    /* Fixed Joysticks (Bottom-Left & Bottom-Right) */
+    .fixed-joystick-wrap { position: absolute; bottom: 20px; pointer-events: auto; touch-action: none; width: 144px; height: 144px; }
+    #leftJoystickWrap { left: 20px; }
+    #rightJoystickWrap { right: 20px; }
+    
+    .joystick-base { position: relative; width: 144px; height: 144px; border-radius: 50%; border: 2px solid rgba(56, 189, 248, 0.5); background: rgba(2, 6, 23, 0.8); box-shadow: 0 8px 24px rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); transition: border-color 0.15s, background-color 0.15s; }
+    .joystick-base.right-base { border-color: rgba(244, 63, 94, 0.5); }
+    .joystick-guide-ring { position: absolute; inset: 12px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.1); pointer-events: none; }
+    .joystick-label-top { position: absolute; top: 8px; font-size: 8px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; pointer-events: none; color: #facc15; }
+    .joystick-label-bottom { position: absolute; bottom: 8px; font-size: 7.5px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; pointer-events: none; color: #38bdf8; }
+    .joystick-sides { position: absolute; width: 100%; padding: 0 10px; display: flex; justify-content: space-between; font-size: 8px; font-weight: 900; color: rgba(56,189,248,0.7); pointer-events: none; }
+    
+    /* Fixed Knob that snaps to center */
+    .joystick-knob { position: absolute; width: 56px; height: 56px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; pointer-events: none; will-change: transform; }
+    .left-knob { background: linear-gradient(180deg, #38bdf8, #2563eb); }
+    .left-knob.flying { background: linear-gradient(180deg, #fbbf24, #ea580c); }
+    .right-knob { background: linear-gradient(180deg, #f43f5e, #dc2626); }
+    .right-knob.swapping { background: linear-gradient(180deg, #38bdf8, #2563eb); }
+    .knob-snap { transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    
+    /* Action Buttons (Center Bottom) */
+    .action-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; align-items: center; pointer-events: auto; }
+    .act-btn { width: 52px; height: 52px; border-radius: 16px; border: 2px solid rgba(255,255,255,0.9); box-shadow: 0 6px 16px rgba(0,0,0,0.5); display: flex; flex-direction: column; align-items: center; justify-content: center; font-weight: 900; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+    .act-btn:active { transform: scale(0.9); }
+    .btn-melee { background: linear-gradient(180deg, #ea580c, #dc2626); color: #fff; }
+    .btn-grenade { background: linear-gradient(180deg, #16a34a, #15803d); color: #fff; }
+    .btn-emote { background: linear-gradient(180deg, #f59e0b, #d97706); color: #020617; }
+    .act-btn span.icon { font-size: 18px; line-height: 1; }
+    .act-btn span.text { font-size: 7px; text-transform: uppercase; margin-top: 2px; }
+
+    /* Modals & Menus */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.9); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+    .modal-box { background: #0f172a; border: 2px solid #334155; border-radius: 24px; padding: 22px; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.8); text-align: center; }
+    .modal-title { font-size: 22px; font-weight: 900; color: #f8fafc; margin-bottom: 4px; letter-spacing: -0.5px; }
+    .modal-subtitle { font-size: 12px; color: #94a3b8; margin-bottom: 16px; }
+    .input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .game-input { flex: 1; background: #020617; border: 2px solid #334155; border-radius: 14px; padding: 11px; color: #fff; font-size: 14px; font-weight: 700; outline: none; text-align: center; }
+    .game-input:focus { border-color: #38bdf8; }
+    .btn-primary { width: 100%; background: linear-gradient(180deg, #0284c7, #2563eb); border: 2px solid #fff; border-radius: 14px; padding: 12px; color: #fff; font-size: 14px; font-weight: 900; cursor: pointer; text-transform: uppercase; box-shadow: 0 4px 14px rgba(2,132,199,0.4); margin-bottom: 8px; }
+    .btn-primary:active { transform: scale(0.96); }
+    .btn-secondary { width: 100%; background: #1e293b; border: 2px solid #475569; border-radius: 14px; padding: 10px; color: #cbd5e1; font-size: 12px; font-weight: 800; cursor: pointer; text-transform: uppercase; margin-bottom: 8px; }
+    .btn-secondary:active { transform: scale(0.96); }
+    .btn-survival { background: linear-gradient(180deg, #ea580c, #c2410c); border-color: #fca5a5; }
+
+    /* Avatar & Map selectors */
+    .avatar-grid { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+    .avatar-btn { background: #020617; border: 2px solid #334155; border-radius: 12px; padding: 7px 11px; font-size: 11px; font-weight: 800; cursor: pointer; color: #94a3b8; }
+    .avatar-btn.selected { border-color: #38bdf8; color: #38bdf8; background: rgba(56, 189, 248, 0.1); }
+
+    /* Status Badge */
+    .fb-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(15, 23, 42, 0.85); border: 1px solid #334155; border-radius: 9999px; padding: 4px 10px; font-size: 10px; font-weight: 800; margin-bottom: 14px; }
+    .fb-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; }
+    .fb-dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+
+    /* Red Error Box */
+    #errorBox { display: none; background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 14px; padding: 10px 14px; margin-top: 12px; color: #fca5a5; font-size: 11px; text-align: left; word-break: break-word; }
+    
+    /* Large Room Code Box */
+    .room-code-banner { font-size: 40px; font-weight: 900; letter-spacing: 8px; color: #facc15; font-family: monospace; background: rgba(0,0,0,0.5); padding: 14px 20px; border-radius: 18px; border: 2px dashed #facc15; margin: 14px 0; text-shadow: 0 0 16px rgba(250,204,21,0.5); }
+    .lobby-player-list { display: flex; flex-direction: column; gap: 6px; max-height: 140px; overflow-y: auto; margin-bottom: 14px; }
+    .lobby-player-row { display: flex; justify-content: space-between; align-items: center; background: #020617; border: 1px solid #334155; border-radius: 10px; padding: 8px 12px; font-size: 12px; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="uiLayer">
+    <!-- TOP BAR -->
+    <div class="top-bar">
+      <!-- Top Left: Scope Zoom & Health / Fuel -->
+      <div class="top-left">
+        <button id="zoomBtn" class="hud-btn interactive" title="Cycle Scope Zoom (1x to 6x)">
+          <span id="zoomLevelText" style="font-size: 14px;">1x</span>
+          <span class="label">SCOPE</span>
+        </button>
+
+        <div class="hud-card">
+          <div style="font-size: 12px; font-weight: 900; color: #facc15;" id="livesDisplay">x3 🪖</div>
+          <div class="bar-wrap">
+            <div class="bar-header">
+              <span style="color: #c084fc;">HP</span>
+              <span id="hpText" style="color: #f8fafc; font-family: monospace;">120/120</span>
+            </div>
+            <div class="bar-bg">
+              <div id="hpBar" class="bar-fill hp-fill" style="width: 100%;"></div>
+            </div>
+
+            <div class="bar-header" style="margin-top: 2px;">
+              <span style="color: #38bdf8;">JET</span>
+              <span id="fuelText" style="color: #94a3b8; font-family: monospace;">100%</span>
+            </div>
+            <div class="bar-bg">
+              <div id="fuelBar" class="bar-fill fuel-fill" style="width: 100%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Kill Feed -->
+      <div id="killFeed"></div>
+
+      <!-- Top Right: Weapon & Ammo -->
+      <div class="top-right">
+        <div class="hud-card">
+          <div id="weaponIcon" style="font-size: 20px;">🔫</div>
+          <div style="display: flex; flex-direction: column;">
+            <span id="weaponName" style="font-size: 11px; font-weight: 900; text-transform: uppercase;">PISTOL</span>
+            <span id="ammoText" style="font-size: 13px; font-weight: 900; font-family: monospace; color: #38bdf8;">12 / 60</span>
+          </div>
+        </div>
+        <button id="swapBtn" class="hud-btn interactive" title="Swap Weapon">
+          <span>🔄</span>
+          <span class="label">SWAP</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Room Badge Corner -->
+    <div id="roomBadgeCorner" style="position: absolute; bottom: 12px; right: 180px; display: none;" class="hud-card">
+      <span style="font-size: 10px; font-weight: 900; color: #facc15; font-family: monospace;" id="roomBadgeText">ROOM: ABCD</span>
+    </div>
+
+    <!-- FIXED LEFT JOYSTICK (Bottom-Left) -->
+    <div id="leftJoystickWrap" class="fixed-joystick-wrap">
+      <div id="leftJoystickBase" class="joystick-base">
+        <div class="joystick-guide-ring"></div>
+        <div id="leftFlyLabel" class="joystick-label-top">▲ UP TO FLY</div>
+        <div class="joystick-sides">
+          <span>◀ RUN</span>
+          <span>RUN ▶</span>
+        </div>
+        <div class="joystick-label-bottom">DOWN TO CROUCH 🛡️</div>
+        <div id="leftKnob" class="joystick-knob left-knob knob-snap"></div>
+      </div>
+    </div>
+
+    <!-- ACTION BUTTONS (Center Bottom) -->
+    <div class="action-bar">
+      <button id="meleeBtn" class="act-btn btn-melee" title="Melee Punch">
+        <span class="icon">🥊</span>
+        <span class="text">MELEE</span>
+      </button>
+      <button id="grenadeBtn" class="act-btn btn-grenade" title="Throw Grenade">
+        <span class="icon" id="grenadeIcon">💣</span>
+        <span class="text" id="grenadeCountText">BOMB (3)</span>
+      </button>
+      <button id="cycleGrenadeBtn" class="act-btn" style="width: 36px; background: #1e293b; color: #facc15;" title="Cycle Grenade Type">
+        <span style="font-size: 13px;">↺</span>
+        <span class="text" style="color: #94a3b8;">TYPE</span>
+      </button>
+      <button id="emoteBtn" class="act-btn btn-emote" title="Emote">
+        <span class="icon">🎭</span>
+        <span class="text">EMOTE</span>
+      </button>
+    </div>
+
+    <!-- FIXED RIGHT JOYSTICK (Bottom-Right) -->
+    <div id="rightJoystickWrap" class="fixed-joystick-wrap">
+      <div id="rightJoystickBase" class="joystick-base right-base">
+        <div class="joystick-guide-ring"></div>
+        <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; border: 1.5px dashed rgba(56, 189, 248, 0.6); display: flex; align-items: center; justify-content: center; font-size: 10px; color: #38bdf8; pointer-events: none;">
+          ⇄
+        </div>
+        <div class="joystick-label-top" style="color: #f43f5e;">HOLD TO SHOOT</div>
+        <div id="rightSwapLabel" class="joystick-label-bottom" style="color: rgba(56,189,248,0.9);">INNER: SWAP GUN</div>
+        <div id="rightKnob" class="joystick-knob right-knob knob-snap">
+          <span style="font-size: 16px;">🎯</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN MENU MODAL -->
+  <div id="lobbyModal" class="modal-backdrop">
+    <div class="modal-box">
+      <!-- Firebase connection status badge -->
+      <div class="fb-badge">
+        <span id="fbDot" class="fb-dot"></span>
+        <span id="fbStatusText">Firebase: not connected</span>
+      </div>
+
+      <div class="modal-title">🪖 BATTLE TOON 2D</div>
+      <div class="modal-subtitle">Direct Browser Multiplayer via Firebase</div>
+
+      <div class="input-row">
+        <input id="playerNameInput" class="game-input" type="text" maxlength="14" placeholder="Your Soldier Name" value="Trooper" />
+      </div>
+
+      <!-- Uniform Camo -->
+      <div style="margin-bottom: 6px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">Uniform Camo</div>
+      <div class="avatar-grid" id="camoSelector">
+        <button class="avatar-btn selected" data-camo="jungle">Jungle</button>
+        <button class="avatar-btn" data-camo="arctic">Arctic</button>
+        <button class="avatar-btn" data-camo="desert">Desert</button>
+        <button class="avatar-btn" data-camo="crimson">Crimson</button>
+      </div>
+
+      <!-- Arena Map -->
+      <div style="margin-bottom: 6px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase;">Arena Map</div>
+      <div class="avatar-grid" id="mapSelector">
+        <button class="avatar-btn selected" data-map="jungle">Jungle</button>
+        <button class="avatar-btn" data-map="snow">Snow</button>
+        <button class="avatar-btn" data-map="desert">Desert</button>
+      </div>
+
+      <button id="createRoomBtn" class="btn-primary">Create Room</button>
+      
+      <div class="input-row" style="margin-top: 8px;">
+        <input id="roomCodeInput" class="game-input" type="text" maxlength="4" placeholder="4-LETTER CODE" style="text-transform: uppercase;" />
+        <button id="joinRoomBtn" class="btn-primary" style="flex: 1; margin: 0;">Join Room</button>
+      </div>
+
+      <div style="margin: 10px 0; font-size: 10px; color: #64748b; font-weight: 800;">— OR SOLO PRACTICE —</div>
+      <button id="playSurvivalBtn" class="btn-primary btn-survival">Play Survival Wave Mode</button>
+
+      <!-- Exact Error Box -->
+      <div id="errorBox">
+        <div style="font-weight: 900; color: #ef4444; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>⚠️</span>
+          <span>Error</span>
+          <span id="errorCodeText" style="font-family: monospace; font-size: 11px; background: rgba(239,68,68,0.25); padding: 2px 6px; border-radius: 6px;"></span>
+        </div>
+        <div id="errorMessageText" style="line-height: 1.4;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROOM LOBBY MODAL (Shows 4-Letter Code in Large Text!) -->
+  <div id="roomWaitingModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-title">⚔️ ROOM LOBBY</div>
+      <div class="modal-subtitle">Share this 4-letter code with friends to join:</div>
+
+      <!-- Large 4-Letter Code Display -->
+      <div id="largeRoomCodeDisplay" class="room-code-banner">ABCD</div>
+      <button id="copyCodeBtn" class="btn-secondary" style="margin-bottom: 14px;">📋 Copy Room Code</button>
+
+      <div style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px;">
+        Players In Room (<span id="playerCountDisplay">1</span>)
+      </div>
+      <div class="lobby-player-list" id="lobbyPlayerList"></div>
+
+      <!-- Host Start Button -->
+      <div id="hostControls">
+        <button id="startMatchHostBtn" class="btn-primary" style="background: linear-gradient(180deg, #16a34a, #15803d); border-color: #86efac;">
+          🚀 Start Match
+        </button>
+      </div>
+      <div id="guestWaitingNotice" style="display: none; font-size: 12px; font-weight: 800; color: #facc15; margin: 10px 0;">
+        Waiting for host to start match... ⏳
+      </div>
+
+      <!-- Exact Error Box in Lobby -->
+      <div id="lobbyErrorBox" style="display: none; background: rgba(239, 68, 68, 0.15); border: 2px solid #ef4444; border-radius: 14px; padding: 10px 14px; margin-bottom: 10px; color: #fca5a5; font-size: 11px; text-align: left; word-break: break-word;">
+        <div style="font-weight: 900; color: #ef4444; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+          <span>⚠️</span>
+          <span>Error</span>
+          <span id="lobbyErrorCodeText" style="font-family: monospace; font-size: 11px; background: rgba(239,68,68,0.25); padding: 2px 6px; border-radius: 6px;"></span>
+        </div>
+        <div id="lobbyErrorMessageText" style="line-height: 1.4;"></div>
+      </div>
+
+      <button id="leaveRoomBtn" class="btn-secondary" style="border-color: #ef4444; color: #fca5a5;">Leave Room</button>
+    </div>
+  </div>
+
+  <!-- GAME OVER MODAL -->
+  <div id="gameOverModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-title" id="gameOverTitle">🏆 MATCH OVER</div>
+      <div class="modal-subtitle" id="gameOverSubtitle">Winner determined!</div>
+      <div id="leaderboardList" style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px;"></div>
+      <button id="playAgainBtn" class="btn-primary">Return to Lobby</button>
+    </div>
+  </div>
+
+  <!-- MODULAR FIREBASE REALTIME DATABASE & ENGINE LOGIC -->
+  <script type="module">
+    import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, set, get, onValue, update, remove, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+    // 1. FIREBASE SETUP
+    const firebaseConfig = {
+      databaseURL: "https://multi-game-65552-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "multi-game-65552",
+      authDomain: "multi-game-65552.firebaseapp.com",
+      storageBucket: "multi-game-65552.appspot.com",
+    };
+
+    let fbApp = null;
+    let fbDb = null;
+    let isConnected = false;
+
+    try {
+      fbApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      fbDb = getDatabase(fbApp, firebaseConfig.databaseURL);
+      
+      // Connection state listener
+      const connectedRef = ref(fbDb, '.info/connected');
+      onValue(connectedRef, (snap) => {
+        isConnected = snap.val() === true;
+        const dot = document.getElementById('fbDot');
+        const text = document.getElementById('fbStatusText');
+        if (dot && text) {
+          if (isConnected) {
+            dot.classList.add('connected');
+            text.textContent = 'Firebase: connected';
+          } else {
+            dot.classList.remove('connected');
+            text.textContent = 'Firebase: not connected';
+          }
+        }
+      });
+    } catch (e) {
+      console.error('Firebase init error:', e);
+      showError(e);
+    }
+
+    // 10-Second Timeout Utility
+    function withTimeout(promise, timeoutMs = 10000, actionName = 'operation') {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          const err = new Error(`Request timed out after ${timeoutMs / 1000}s while ${actionName}. Check your network or database rules.`);
+          err.code = 'TIMEOUT';
+          reject(err);
+        }, timeoutMs);
+
+        promise
+          .then((res) => {
+            clearTimeout(timer);
+            resolve(res);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+    }
+
+    function showError(err) {
+      const code = (err && (err.code || err.name)) ? String(err.code || err.name) : 'ERROR';
+      const msg = (err && err.message) ? String(err.message) : String(err);
+
+      const box = document.getElementById('errorBox');
+      const codeEl = document.getElementById('errorCodeText');
+      const msgEl = document.getElementById('errorMessageText');
+      if (box && codeEl && msgEl) {
+        codeEl.textContent = `[${code}]`;
+        msgEl.textContent = msg;
+        box.style.display = 'block';
+      }
+
+      const lobbyBox = document.getElementById('lobbyErrorBox');
+      const lobbyCodeEl = document.getElementById('lobbyErrorCodeText');
+      const lobbyMsgEl = document.getElementById('lobbyErrorMessageText');
+      if (lobbyBox && lobbyCodeEl && lobbyMsgEl) {
+        lobbyCodeEl.textContent = `[${code}]`;
+        lobbyMsgEl.textContent = msg;
+        lobbyBox.style.display = 'block';
+      }
+    }
+
+    function clearError() {
+      const box = document.getElementById('errorBox');
+      if (box) box.style.display = 'none';
+      const lobbyBox = document.getElementById('lobbyErrorBox');
+      if (lobbyBox) lobbyBox.style.display = 'none';
+    }
+
+    // 2. AUDIO SYNTHESIZER
+    class SoundManager {
+      constructor() { this.ctx = null; this.isMuted = false; }
+      init() {
+        if (!this.ctx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) this.ctx = new AudioContextClass();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      }
+      playPistol() {
+        if (this.isMuted) return; this.init(); if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(650, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 0.1);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.11);
+      }
+      playExplosion() {
+        if (this.isMuted) return; this.init(); if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(20, now + 0.5);
+        gain.gain.setValueAtTime(0.6, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.56);
+      }
+      playPunch() {
+        if (this.isMuted) return; this.init(); if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.16);
+      }
+      playZoom() {
+        if (this.isMuted) return; this.init(); if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(900, now + 0.08);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.09);
+      }
+    }
+    const sound = new SoundManager();
+
+    // 3. WEAPONS CONFIG
+    const WEAPONS = {
+      pistol: { id: 'pistol', name: 'Pistol', damage: 24, ammoMax: 12, ammoReserve: 60, fireRate: 3.5, reloadTime: 1.0, bulletSpeed: 820, spread: 0.03, color: '#64748b', bulletColor: '#facc15', bulletRadius: 3.5, icon: '🔫' },
+      smg: { id: 'smg', name: 'SMG', damage: 17, ammoMax: 30, ammoReserve: 150, fireRate: 9.5, reloadTime: 1.3, bulletSpeed: 880, spread: 0.1, color: '#0284c7', bulletColor: '#38bdf8', bulletRadius: 3.2, icon: '⚡' },
+      rifle: { id: 'rifle', name: 'AK Rifle', damage: 32, ammoMax: 30, ammoReserve: 120, fireRate: 6.2, reloadTime: 1.6, bulletSpeed: 950, spread: 0.05, color: '#b45309', bulletColor: '#f59e0b', bulletRadius: 4.0, icon: '💥' },
+      shotgun: { id: 'shotgun', name: 'Shotgun', damage: 18, ammoMax: 6, ammoReserve: 36, fireRate: 1.2, reloadTime: 1.8, bulletSpeed: 720, spread: 0.22, pellets: 6, color: '#dc2626', bulletColor: '#fb923c', bulletRadius: 3.5, icon: '🔴' },
+      sniper: { id: 'sniper', name: 'Sniper Rifle', damage: 90, ammoMax: 4, ammoReserve: 24, fireRate: 0.8, reloadTime: 2.2, bulletSpeed: 1400, spread: 0.01, color: '#059669', bulletColor: '#34d399', bulletRadius: 4.5, icon: '🎯' },
+      rocket: { id: 'rocket', name: 'Rocket Launcher', damage: 115, ammoMax: 3, ammoReserve: 15, fireRate: 0.7, reloadTime: 2.5, bulletSpeed: 580, spread: 0.02, isExplosive: true, color: '#7c3aed', bulletColor: '#c084fc', bulletRadius: 7.0, icon: '🚀' },
+    };
+
+    // 4. MAPS CONFIG
+    const MAPS = {
+      jungle: {
+        id: 'jungle', name: 'Jungle Outpost', bgGradient: ['#062314', '#0d4022', '#14532d'], width: 1500, height: 850,
+        platforms: [
+          { x: 0, y: 800, w: 1500, h: 50, color: '#166534' },
+          { x: 0, y: 0, w: 1500, h: 25, color: '#14532d' },
+          { x: 0, y: 0, w: 25, h: 850, color: '#14532d' },
+          { x: 1475, y: 0, w: 25, h: 850, color: '#14532d' },
+          { x: 100, y: 660, w: 280, h: 24, color: '#15803d' },
+          { x: 480, y: 680, w: 220, h: 22, color: '#15803d' },
+          { x: 800, y: 680, w: 220, h: 22, color: '#15803d' },
+          { x: 1120, y: 660, w: 280, h: 24, color: '#15803d' },
+          { x: 400, y: 510, w: 700, h: 20, color: '#78350f' },
+          { x: 280, y: 270, w: 240, h: 20, color: '#166534' },
+          { x: 980, y: 270, w: 240, h: 20, color: '#166534' },
+          { x: 630, y: 240, w: 240, h: 20, color: '#78350f' },
+          { x: 380, y: 785, w: 50, h: 15, color: '#22c55e', isJumpPad: true },
+          { x: 1070, y: 785, w: 50, h: 15, color: '#22c55e', isJumpPad: true },
+        ],
+        spawnPoints: [{ x: 180, y: 600 }, { x: 1300, y: 600 }, { x: 750, y: 450 }, { x: 380, y: 210 }, { x: 1120, y: 210 }],
+        pickups: [
+          { id: 'pk_med1', x: 380, y: 235, type: 'medkit', respawnTime: 15, isAvailable: true },
+          { id: 'pk_med2', x: 1120, y: 235, type: 'medkit', respawnTime: 15, isAvailable: true },
+          { id: 'pk_rkt', x: 750, y: 475, type: 'weapon', weaponType: 'rocket', respawnTime: 18, isAvailable: true },
+          { id: 'pk_snp', x: 750, y: 205, type: 'weapon', weaponType: 'sniper', respawnTime: 16, isAvailable: true },
+        ],
+      },
+      snow: {
+        id: 'snow', name: 'Snow Mountain', bgGradient: ['#0f172a', '#1e293b', '#334155'], width: 1500, height: 850,
+        platforms: [
+          { x: 0, y: 800, w: 1500, h: 50, color: '#e2e8f0' },
+          { x: 0, y: 0, w: 1500, h: 25, color: '#334155' },
+          { x: 0, y: 0, w: 25, h: 850, color: '#334155' },
+          { x: 1475, y: 0, w: 25, h: 850, color: '#334155' },
+          { x: 120, y: 670, w: 260, h: 22, color: '#f1f5f9' },
+          { x: 480, y: 660, w: 240, h: 22, color: '#f1f5f9' },
+          { x: 780, y: 660, w: 240, h: 22, color: '#f1f5f9' },
+          { x: 1120, y: 670, w: 260, h: 22, color: '#f1f5f9' },
+          { x: 440, y: 490, w: 620, h: 22, color: '#78350f' },
+          { x: 280, y: 260, w: 240, h: 20, color: '#f8fafc' },
+          { x: 980, y: 260, w: 240, h: 20, color: '#f8fafc' },
+          { x: 380, y: 785, w: 50, h: 15, color: '#38bdf8', isJumpPad: true },
+          { x: 1070, y: 785, w: 50, h: 15, color: '#38bdf8', isJumpPad: true },
+        ],
+        spawnPoints: [{ x: 180, y: 610 }, { x: 1300, y: 610 }, { x: 750, y: 430 }, { x: 380, y: 200 }, { x: 1120, y: 200 }],
+        pickups: [
+          { id: 'pk_s_med', x: 380, y: 225, type: 'medkit', respawnTime: 15, isAvailable: true },
+          { id: 'pk_s_rkt', x: 750, y: 455, type: 'weapon', weaponType: 'rocket', respawnTime: 18, isAvailable: true },
+        ],
+      },
+      desert: {
+        id: 'desert', name: 'Desert Badlands', bgGradient: ['#291307', '#451a03', '#78350f'], width: 1500, height: 850,
+        platforms: [
+          { x: 0, y: 800, w: 1500, h: 50, color: '#9a3412' },
+          { x: 0, y: 0, w: 1500, h: 25, color: '#451a03' },
+          { x: 0, y: 0, w: 25, h: 850, color: '#7c2d12' },
+          { x: 1475, y: 0, w: 25, h: 850, color: '#7c2d12' },
+          { x: 100, y: 670, w: 260, h: 22, color: '#c2410c' },
+          { x: 480, y: 670, w: 220, h: 22, color: '#c2410c' },
+          { x: 800, y: 670, w: 220, h: 22, color: '#c2410c' },
+          { x: 1140, y: 670, w: 260, h: 22, color: '#c2410c' },
+          { x: 420, y: 510, w: 660, h: 20, color: '#b45309' },
+          { x: 280, y: 270, w: 240, h: 20, color: '#ea580c' },
+          { x: 980, y: 270, w: 240, h: 20, color: '#ea580c' },
+          { x: 380, y: 785, w: 50, h: 15, color: '#f97316', isJumpPad: true },
+          { x: 1070, y: 785, w: 50, h: 15, color: '#f97316', isJumpPad: true },
+        ],
+        spawnPoints: [{ x: 180, y: 610 }, { x: 1300, y: 610 }, { x: 750, y: 450 }, { x: 380, y: 210 }, { x: 1120, y: 210 }],
+        pickups: [
+          { id: 'pk_d_med', x: 380, y: 235, type: 'medkit', respawnTime: 15, isAvailable: true },
+          { id: 'pk_d_snp', x: 750, y: 205, type: 'weapon', weaponType: 'sniper', respawnTime: 16, isAvailable: true },
+        ],
+      },
+    };
+
+    // 5. ENGINE STATE
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let gameState = 'menu'; // 'menu' | 'lobby' | 'playing' | 'game_over'
+    let gameMode = 'multiplayer'; // 'multiplayer' | 'survival'
+    let currentMap = MAPS.jungle;
+    let currentRoomCode = '';
+    let isRoomHost = false;
+    let localPlayerId = 'p_' + Math.random().toString(36).substring(2, 8);
+    let playerName = 'Trooper';
+    let playerCamo = 'jungle';
+    let roomUnsubscribe = null;
+    
+    const players = new Map();
+    const bullets = [];
+    const particles = [];
+    const floatingTexts = [];
+    
+    // Zoom levels: 1x, 2x, 3x, 4x, 5x, 6x
+    const zoomScales = { 1: 1.0, 2: 1.25, 3: 1.55, 4: 1.9, 5: 2.3, 6: 2.75 };
+    let zoomLevel = 1;
+    let currentZoom = 1.0;
+    let targetZoom = 1.0;
+    const camera = { x: 0, y: 0, zoom: 1.0 };
+    
+    // Input vector
+    const input = { moveX: 0, moveY: 0, aimX: 1, aimY: 0, isJetpacking: false, isShooting: false };
+
+    function handleResize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+      canvas.width = Math.round(window.innerWidth * dpr);
+      canvas.height = Math.round(window.innerHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    function createPlayer(id, name, color, camo, x, y) {
+      return {
+        id, name, color, camo: camo || 'jungle',
+        x, y, vx: 0, vy: 0, aimAngle: 0,
+        isGrounded: true, isJetpacking: false, isCrouching: false, isShooting: false,
+        health: 120, maxHealth: 120, fuel: 100, maxFuel: 100, lives: 3,
+        currentWeapon: 'pistol', secondaryWeapon: 'smg',
+        ammo: 12, reserveAmmo: 60, grenades: 3, grenadeType: 'frag',
+        kills: 0, deaths: 0, isDead: false, respawnTimer: 0, bodyTilt: 0,
+      };
+    }
+
+    // FIXED JOYSTICKS (Never move/hover; only knob moves inside base)
+    const MAX_KNOB_TRAVEL = 44;
+    const TOUCH_ACTIVATION_RADIUS = 82;
+    const SWAP_ZONE_RADIUS = 18;
+
+    const leftWrap = document.getElementById('leftJoystickWrap');
+    const leftBase = document.getElementById('leftJoystickBase');
+    const leftKnob = document.getElementById('leftKnob');
+    const leftFlyLabel = document.getElementById('leftFlyLabel');
+    let leftTouchId = null;
+
+    const rightWrap = document.getElementById('rightJoystickWrap');
+    const rightBase = document.getElementById('rightJoystickBase');
+    const rightKnob = document.getElementById('rightKnob');
+    const rightSwapLabel = document.getElementById('rightSwapLabel');
+    let rightTouchId = null;
+    let hasTriggeredSwap = false;
+
+    // Left Touch
+    leftWrap.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (leftTouchId !== null) return;
+      const rect = leftBase.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (Math.hypot(t.clientX - cx, t.clientY - cy) <= TOUCH_ACTIVATION_RADIUS) {
+          leftTouchId = t.identifier;
+          leftKnob.classList.remove('knob-snap');
+          updateLeftStick(t.clientX, t.clientY, cx, cy);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    function updateLeftStick(clientX, clientY, cx, cy) {
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      const dist = Math.hypot(dx, dy);
+      let kx = dx, ky = dy;
+      if (dist > MAX_KNOB_TRAVEL) {
+        kx = (dx / dist) * MAX_KNOB_TRAVEL;
+        ky = (dy / dist) * MAX_KNOB_TRAVEL;
+      }
+      leftKnob.style.transform = `translate(${kx}px, ${ky}px)`;
+
+      input.moveX = Math.max(-1, Math.min(1, dx / MAX_KNOB_TRAVEL));
+      input.moveY = Math.max(-1, Math.min(1, dy / MAX_KNOB_TRAVEL));
+      const up = Math.max(0, -input.moveY);
+      if (up > 0.1) {
+        leftKnob.classList.add('flying');
+        leftFlyLabel.textContent = `FLY ${Math.round(up * 100)}%`;
+      } else {
+        leftKnob.classList.remove('flying');
+        leftFlyLabel.textContent = '▲ UP TO FLY';
+      }
+    }
+
+    // Right Touch
+    rightWrap.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (rightTouchId !== null) return;
+      const rect = rightBase.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (Math.hypot(t.clientX - cx, t.clientY - cy) <= TOUCH_ACTIVATION_RADIUS) {
+          rightTouchId = t.identifier;
+          rightKnob.classList.remove('knob-snap');
+          hasTriggeredSwap = false;
+          updateRightStick(t.clientX, t.clientY, cx, cy);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    function updateRightStick(clientX, clientY, cx, cy) {
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      const dist = Math.hypot(dx, dy);
+      let kx = dx, ky = dy;
+      if (dist > MAX_KNOB_TRAVEL) {
+        kx = (dx / dist) * MAX_KNOB_TRAVEL;
+        ky = (dy / dist) * MAX_KNOB_TRAVEL;
+      }
+      rightKnob.style.transform = `translate(${kx}px, ${ky}px)`;
+
+      const inSwap = dist < SWAP_ZONE_RADIUS;
+      if (inSwap && !hasTriggeredSwap) {
+        hasTriggeredSwap = true;
+        swapWeapon();
+      } else if (!inSwap) {
+        hasTriggeredSwap = false;
+      }
+
+      if (dist > 4) {
+        input.aimX = dx / dist;
+        input.aimY = dy / dist;
+      }
+      input.isShooting = dist >= SWAP_ZONE_RADIUS;
+
+      if (inSwap) {
+        rightKnob.classList.add('swapping');
+        rightSwapLabel.textContent = 'SWAPPED!';
+      } else {
+        rightKnob.classList.remove('swapping');
+        rightSwapLabel.textContent = input.isShooting ? 'FIRING!' : 'INNER: SWAP GUN';
+      }
+    }
+
+    window.addEventListener('touchmove', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === leftTouchId) {
+          const rect = leftBase.getBoundingClientRect();
+          updateLeftStick(t.clientX, t.clientY, rect.left + rect.width / 2, rect.top + rect.height / 2);
+        } else if (t.identifier === rightTouchId) {
+          const rect = rightBase.getBoundingClientRect();
+          updateRightStick(t.clientX, t.clientY, rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }
+      }
+    }, { passive: false });
+
+    function endTouches(e) {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === leftTouchId) {
+          leftTouchId = null;
+          leftKnob.classList.add('knob-snap');
+          leftKnob.style.transform = 'translate(0px, 0px)';
+          leftKnob.classList.remove('flying');
+          leftFlyLabel.textContent = '▲ UP TO FLY';
+          input.moveX = 0; input.moveY = 0;
+        } else if (t.identifier === rightTouchId) {
+          rightTouchId = null;
+          rightKnob.classList.add('knob-snap');
+          rightKnob.style.transform = 'translate(0px, 0px)';
+          rightKnob.classList.remove('swapping');
+          rightSwapLabel.textContent = 'INNER: SWAP GUN';
+          input.isShooting = false;
+        }
+      }
+    }
+    window.addEventListener('touchend', endTouches);
+    window.addEventListener('touchcancel', endTouches);
+
+    // Zoom Button (1x to 6x)
+    const zoomBtn = document.getElementById('zoomBtn');
+    const zoomLevelText = document.getElementById('zoomLevelText');
+    zoomBtn.addEventListener('click', () => {
+      zoomLevel = zoomLevel >= 6 ? 1 : zoomLevel + 1;
+      targetZoom = zoomScales[zoomLevel];
+      zoomLevelText.textContent = `${zoomLevel}x`;
+      sound.playZoom();
+    });
+
+    // Weapon Swap
+    function swapWeapon() {
+      const p = players.get(localPlayerId);
+      if (!p || p.isDead) return;
+      const temp = p.currentWeapon;
+      p.currentWeapon = p.secondaryWeapon || 'pistol';
+      p.secondaryWeapon = temp;
+      const w = WEAPONS[p.currentWeapon];
+      p.ammo = w.ammoMax;
+      updateHUDWeapon();
+      sound.playZoom();
+    }
+    document.getElementById('swapBtn').addEventListener('click', swapWeapon);
+
+    // Melee attack
+    document.getElementById('meleeBtn').addEventListener('click', () => {
+      const p = players.get(localPlayerId);
+      if (!p || p.isDead) return;
+      sound.playPunch();
+      floatingTexts.push({ text: 'POW!', x: p.x, y: p.y - 30, life: 1, color: '#f59e0b' });
+      for (const [id, target] of players.entries()) {
+        if (id !== localPlayerId && !target.isDead) {
+          if (Math.hypot(target.x - p.x, target.y - p.y) < 65) {
+            target.health = Math.max(0, target.health - 45);
+            if (target.health <= 0) handlePlayerDeath(target, p.id, 'melee');
+            break;
+          }
+        }
+      }
+    });
+
+    // Grenade throw
+    document.getElementById('grenadeBtn').addEventListener('click', () => {
+      const p = players.get(localPlayerId);
+      if (!p || p.isDead || p.grenades <= 0) return;
+      p.grenades--;
+      updateHUDWeapon();
+      bullets.push({
+        id: 'g_' + Math.random(), shooterId: p.id, x: p.x, y: p.y - 10,
+        vx: Math.cos(p.aimAngle) * 550, vy: Math.sin(p.aimAngle) * 550 - 120,
+        isExplosive: true, radius: 7, color: '#65a30d', lifespan: 2.2
+      });
+    });
+
+    // Cycle Grenade
+    const gTypes = ['frag', 'stun', 'gas'];
+    let gIdx = 0;
+    document.getElementById('cycleGrenadeBtn').addEventListener('click', () => {
+      gIdx = (gIdx + 1) % gTypes.length;
+      const p = players.get(localPlayerId);
+      if (p) p.grenadeType = gTypes[gIdx];
+      const gIcons = { frag: '💣', stun: '⚡', gas: '🧪' };
+      document.getElementById('grenadeIcon').textContent = gIcons[gTypes[gIdx]];
+      updateHUDWeapon();
+    });
+
+    // Emote
+    document.getElementById('emoteBtn').addEventListener('click', () => {
+      const p = players.get(localPlayerId);
+      if (p) {
+        floatingTexts.push({ text: '🔥 CHARGE!', x: p.x, y: p.y - 45, life: 2, color: '#facc15' });
+        if (currentRoomCode && fbDb) {
+          set(ref(fbDb, `rooms/${currentRoomCode}/chat/${Date.now()}`), {
+            id: 'm_' + Date.now(), senderName: p.name, text: '🔥 CHARGE!'
+          });
+        }
+      }
+    });
+
+    function updateHUDWeapon() {
+      const p = players.get(localPlayerId);
+      if (!p) return;
+      const w = WEAPONS[p.currentWeapon];
+      document.getElementById('weaponName').textContent = w.name;
+      document.getElementById('weaponIcon').textContent = w.icon;
+      document.getElementById('ammoText').textContent = `${p.ammo} / ${p.reserveAmmo}`;
+      document.getElementById('grenadeCountText').textContent = `${p.grenadeType.toUpperCase()} (${p.grenades})`;
+    }
+
+    // Explosions with 30% Crouch Defense
+    function triggerExplosion(x, y, radius = 95, maxDamage = 115, shooterId = '') {
+      sound.playExplosion();
+      particles.push({ x, y, vx: 0, vy: 0, life: 0.35, maxLife: 0.35, color: '#f97316', size: 10, type: 'ring' });
+      for (let i = 0; i < 20; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const sp = 40 + Math.random() * 200;
+        particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.45, maxLife: 0.45, color: i % 2 === 0 ? '#ef4444' : '#f59e0b', size: 6 });
+      }
+
+      for (const p of players.values()) {
+        if (p.isDead) continue;
+        const dist = Math.hypot(p.x - x, p.y - y);
+        if (dist < radius) {
+          let falloff = 1 - dist / radius;
+          let dmg = Math.round(maxDamage * falloff);
+          // Crouch Defense: explosions deal only 30% damage with much less knockback
+          if (p.isCrouching) {
+            dmg = Math.max(1, Math.round(dmg * 0.3));
+            falloff *= 0.3;
+            floatingTexts.push({ text: `🛡️ -${dmg}`, x: p.x, y: p.y - 25, life: 1, color: '#38bdf8' });
+          } else {
+            floatingTexts.push({ text: `-${dmg}`, x: p.x, y: p.y - 20, life: 1, color: '#ef4444' });
+          }
+          p.health = Math.max(0, p.health - dmg);
+          const pushA = Math.atan2(p.y - y, p.x - x);
+          p.vx += Math.cos(pushA) * 350 * falloff;
+          p.vy += Math.sin(pushA) * 350 * falloff;
+          if (p.health <= 0) handlePlayerDeath(p, shooterId, 'rocket');
+        }
+      }
+    }
+
+    function handlePlayerDeath(victim, killerId, weapon) {
+      if (victim.isDead) return;
+      victim.isDead = true;
+      victim.deaths++;
+      victim.respawnTimer = 3.0;
+
+      const k = players.get(killerId);
+      if (k && k.id !== victim.id) {
+        k.kills++;
+        showKillFeed(k.name, victim.name, weapon);
+        if (k.kills >= 15 && gameState === 'playing') {
+          triggerGameOver(k.name);
+        }
+      }
+    }
+
+    function showKillFeed(killer, victim, weapon) {
+      const feed = document.getElementById('killFeed');
+      const item = document.createElement('div');
+      item.className = 'kill-item';
+      item.textContent = `${killer} 💥 [${weapon}] 💀 ${victim}`;
+      feed.prepend(item);
+      setTimeout(() => item.remove(), 4000);
+    }
+
+    function triggerGameOver(winner) {
+      gameState = 'game_over';
+      document.getElementById('gameOverModal').style.display = 'flex';
+      document.getElementById('gameOverTitle').textContent = `🏆 ${winner.toUpperCase()} WINS!`;
+      const list = document.getElementById('leaderboardList');
+      list.innerHTML = '';
+      Array.from(players.values()).sort((a,b) => b.kills - a.kills).forEach(p => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.fontSize = '12px';
+        row.style.fontWeight = '800';
+        row.innerHTML = `<span>${p.name}</span><span style="color:#facc15;">${p.kills} Kills</span>`;
+        list.appendChild(row);
+      });
+    }
+
+    // 6. MAIN LOOP
+    let lastTime = performance.now();
+    let lastShootTime = 0;
+
+    function gameLoop(now) {
+      const dt = Math.min((now - lastTime) / 1000, 0.04);
+      lastTime = now;
+
+      if (gameState === 'playing') {
+        const lp = players.get(localPlayerId);
+        if (lp && !lp.isDead) {
+          // Aim angle
+          if (Math.hypot(input.aimX, input.aimY) > 0.08) {
+            lp.aimAngle = Math.atan2(input.aimY, input.aimX);
+          }
+
+          // Crouch check
+          const wantsCrouch = lp.isGrounded && input.moveY > 0.35;
+          lp.isCrouching = wantsCrouch;
+          const speed = lp.isCrouching ? 110 : 245;
+
+          // Flying & Immediate Takeoff
+          const upwardThrust = Math.max(0, -input.moveY);
+          const wantsFly = upwardThrust > 0.08 && lp.fuel > 0;
+          const wasJetpacking = lp.isJetpacking;
+
+          if (wantsFly) {
+            if (lp.isGrounded) lp.isGrounded = false;
+            lp.isJetpacking = true;
+            lp.isCrouching = false;
+            const pwr = Math.min(1, Math.max(0.2, (upwardThrust - 0.05) / 0.85));
+
+            if (!wasJetpacking) lp.vy = Math.min(lp.vy - 160, -220);
+
+            const maxRise = -320 - 260 * pwr;
+            lp.vy += -1600 * pwr * dt;
+            if (lp.vy < maxRise) lp.vy = maxRise;
+
+            // Air control
+            if (Math.abs(input.moveX) > 0.08) {
+              const targetAirVx = input.moveX * 280;
+              lp.vx += (targetAirVx - lp.vx) * Math.min(1, 10 * dt);
+            } else {
+              lp.vx *= Math.pow(0.25, dt);
+            }
+            lp.fuel = Math.max(0, lp.fuel - 28 * dt);
+          } else {
+            lp.isJetpacking = false;
+            // Float down gently
+            if (!lp.isGrounded) {
+              lp.vy += 1050 * dt;
+              lp.vy = Math.min(lp.vy, 520);
+              if (lp.vy > 0) lp.vy *= Math.pow(0.88, dt);
+
+              if (Math.abs(input.moveX) > 0.08) {
+                const targetAirVx = input.moveX * 255;
+                lp.vx += (targetAirVx - lp.vx) * Math.min(1, 9 * dt);
+              } else {
+                lp.vx *= Math.pow(0.3, dt);
+              }
+            } else {
+              // Ground acceleration & friction
+              if (Math.abs(input.moveX) > 0.08) {
+                const targetVx = input.moveX * speed;
+                lp.vx += (targetVx - lp.vx) * Math.min(1, 22 * dt);
+              } else {
+                lp.vx += (0 - lp.vx) * Math.min(1, 25 * dt);
+                if (Math.abs(lp.vx) < 4) lp.vx = 0;
+              }
+            }
+          }
+
+          // Fuel recharge
+          if (lp.isGrounded && !lp.isJetpacking) {
+            lp.fuel = Math.min(lp.maxFuel, lp.fuel + 65 * dt);
+          }
+
+          // Body tilt
+          const targetTilt = Math.max(-0.25, Math.min(0.25, lp.vx * 0.0006));
+          lp.bodyTilt = (lp.bodyTilt || 0) + (targetTilt - (lp.bodyTilt || 0)) * Math.min(1, 14 * dt);
+
+          // Decoupled collision (wall sliding, non-sticking)
+          resolveCollisions(lp, dt);
+
+          // Shooting
+          if (input.isShooting) {
+            const w = WEAPONS[lp.currentWeapon];
+            const interval = 1000 / w.fireRate;
+            if (now - lastShootTime >= interval && lp.ammo > 0) {
+              lastShootTime = now;
+              lp.ammo--;
+              sound.playPistol();
+              updateHUDWeapon();
+              const pellets = w.pellets || 1;
+              for (let i = 0; i < pellets; i++) {
+                const spreadA = lp.aimAngle + (Math.random() - 0.5) * w.spread * 2;
+                bullets.push({
+                  id: 'b_' + Math.random(), shooterId: lp.id,
+                  x: lp.x + Math.cos(lp.aimAngle) * 22, y: lp.y + Math.sin(lp.aimAngle) * 22,
+                  vx: Math.cos(spreadA) * w.bulletSpeed, vy: Math.sin(spreadA) * w.bulletSpeed,
+                  damage: w.damage, isExplosive: !!w.isExplosive, radius: w.bulletRadius, color: w.bulletColor, lifespan: 1.8
+                });
+              }
+            }
+          }
+
+          // 120 HP max indicators
+          document.getElementById('hpBar').style.width = `${Math.max(0, (lp.health / 120) * 100)}%`;
+          document.getElementById('hpText').textContent = `${Math.round(lp.health)}/120`;
+          document.getElementById('fuelBar').style.width = `${Math.max(0, (lp.fuel / 100) * 100)}%`;
+          document.getElementById('fuelText').textContent = `${Math.round(lp.fuel)}%`;
+        }
+
+        // Bullets update
+        for (let i = bullets.length - 1; i >= 0; i--) {
+          const b = bullets[i];
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.lifespan -= dt;
+
+          let hit = false;
+          for (const p of currentMap.platforms) {
+            if (b.x >= p.x && b.x <= p.x + p.w && b.y >= p.y && b.y <= p.y + p.h) {
+              hit = true; break;
+            }
+          }
+
+          for (const p of players.values()) {
+            if (p.id !== b.shooterId && !p.isDead) {
+              const hH = p.isCrouching ? 13 : 22;
+              if (Math.abs(b.x - p.x) < 16 && Math.abs(b.y - p.y) < hH) {
+                hit = true;
+                p.health = Math.max(0, p.health - (b.damage || 20));
+                floatingTexts.push({ text: `-${b.damage || 20}`, x: p.x, y: p.y - 20, life: 1, color: '#ef4444' });
+                if (p.health <= 0) handlePlayerDeath(p, b.shooterId, 'gun');
+                break;
+              }
+            }
+          }
+
+          if (hit || b.lifespan <= 0) {
+            if (b.isExplosive) triggerExplosion(b.x, b.y, 95, 115, b.shooterId);
+            bullets.splice(i, 1);
+          }
+        }
+
+        // Camera Smooth Centering
+        if (lp) {
+          currentZoom += (targetZoom - currentZoom) * Math.min(1, 10 * dt);
+          camera.zoom = currentZoom;
+          const vw = canvas.width / camera.zoom;
+          const vh = canvas.height / camera.zoom;
+          let tx = lp.x, ty = lp.y;
+          if (currentMap.width > vw) tx = Math.max(vw / 2, Math.min(currentMap.width - vw / 2, tx));
+          if (currentMap.height > vh) ty = Math.max(vh / 2, Math.min(currentMap.height - vh / 2, ty));
+          camera.x += (tx - camera.x) * Math.min(1, 14 * dt);
+          camera.y += (ty - camera.y) * Math.min(1, 14 * dt);
+        }
+
+        // Pickups (heal up to 120 max)
+        currentMap.pickups.forEach(pk => {
+          if (lp && !lp.isDead && pk.isAvailable && Math.hypot(lp.x - pk.x, lp.y - pk.y) < 32) {
+            if (pk.type === 'medkit' && lp.health < 120) {
+              lp.health = Math.min(120, lp.health + 50);
+              pk.isAvailable = false;
+              sound.playZoom();
+              floatingTexts.push({ text: '+50 HP', x: lp.x, y: lp.y - 20, life: 1.5, color: '#22c55e' });
+              setTimeout(() => { pk.isAvailable = true; }, pk.respawnTime * 1000);
+            }
+          }
+        });
+      }
+
+      // RENDER
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function resolveCollisions(p, dt) {
+      const halfW = 14;
+      const halfH = p.isCrouching ? 13 : 22;
+
+      // X pass
+      let nx = p.x + p.vx * dt;
+      nx = Math.max(halfW, Math.min(currentMap.width - halfW, nx));
+      for (const plat of currentMap.platforms) {
+        if (p.y + halfH - 4 > plat.y && p.y - halfH + 4 < plat.y + plat.h) {
+          if (p.vx > 0 && p.x + halfW <= plat.x + 2 && nx + halfW >= plat.x) {
+            nx = plat.x - halfW; p.vx = 0;
+          } else if (p.vx < 0 && p.x - halfW >= plat.x + plat.w - 2 && nx - halfW <= plat.x + plat.w) {
+            nx = plat.x + plat.w + halfW; p.vx = 0;
+          }
+        }
+      }
+      p.x = nx;
+
+      // Y pass
+      let ny = p.y + p.vy * dt;
+      let grounded = false;
+      for (const plat of currentMap.platforms) {
+        if (p.x + halfW - 2 > plat.x && p.x - halfW + 2 < plat.x + plat.w) {
+          if (p.vy >= 0 && p.y + halfH <= plat.y + 6 && ny + halfH >= plat.y) {
+            if (plat.isJumpPad) {
+              ny = plat.y - halfH; p.vy = -750; sound.playZoom(); grounded = true;
+            } else {
+              ny = plat.y - halfH; p.vy = 0; grounded = true;
+            }
+          } else if (p.vy < 0 && p.y - halfH >= plat.y + plat.h - 6 && ny - halfH <= plat.y + plat.h) {
+            ny = plat.y + plat.h + halfH; p.vy = 0;
+          }
+        }
+      }
+      if (ny + halfH >= currentMap.height - 8) {
+        ny = currentMap.height - 8 - halfH; p.vy = 0; grounded = true;
+      }
+      p.y = ny;
+      p.isGrounded = grounded;
+    }
+
+    function render() {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // Background gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      grad.addColorStop(0, currentMap.bgGradient[0]);
+      grad.addColorStop(0.5, currentMap.bgGradient[1]);
+      grad.addColorStop(1, currentMap.bgGradient[2]);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Centered Camera
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(camera.zoom, camera.zoom);
+      ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
+
+      // Platforms
+      currentMap.platforms.forEach(p => {
+        ctx.fillStyle = p.isJumpPad ? '#a855f7' : p.color || '#166534';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 3;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.strokeRect(p.x, p.y, p.w, p.h);
+      });
+
+      // Pickups
+      currentMap.pickups.forEach(pk => {
+        if (!pk.isAvailable) return;
+        ctx.save();
+        ctx.translate(pk.x, pk.y);
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pk.type === 'medkit' ? '❤️' : '🚀', 0, 0);
+        ctx.restore();
+      });
+
+      // Bullets
+      bullets.forEach(b => {
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const pt = particles[i];
+        pt.x += pt.vx * 0.016; pt.y += pt.vy * 0.016; pt.life -= 0.016;
+        if (pt.type === 'ring') {
+          ctx.strokeStyle = pt.color; ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, (1 - pt.life / pt.maxLife) * 45, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = pt.color;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (pt.life <= 0) particles.splice(i, 1);
+      }
+
+      // Players
+      for (const p of players.values()) {
+        if (p.isDead) continue;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.bodyTilt || 0);
+
+        const crOff = p.isCrouching ? 7 : 0;
+        const cColors = { jungle: '#15803d', arctic: '#e2e8f0', desert: '#c2410c', crimson: '#b91c1c' };
+        ctx.fillStyle = cColors[p.camo] || '#15803d';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 3;
+        ctx.roundRect(-10, -6 + crOff, 20, 20, 4);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(0, -14 + crOff, 10, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        const faceRight = Math.cos(p.aimAngle) >= 0;
+        ctx.arc(faceRight ? 4 : -4, -15 + crOff, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(0, 2 + crOff);
+        ctx.rotate(p.aimAngle);
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(0, -3, 18, 6);
+        ctx.strokeRect(0, -3, 18, 6);
+        ctx.restore();
+
+        // 🛡️ Shield icon above crouching player
+        if (p.isCrouching) {
+          ctx.save();
+          ctx.translate(0, -38);
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('🛡️', 0, 0);
+          ctx.restore();
+        }
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.name, 0, -30 + crOff);
+
+        ctx.restore();
+      }
+
+      // Floating Texts
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.y -= 25 * 0.016; ft.life -= 0.016;
+        ctx.fillStyle = ft.color; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x, ft.y);
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+      }
+
+      ctx.restore();
+    }
+
+    // 7. LOBBY, ROOM CREATION & FIREBASE SYNC
+    const lobbyModal = document.getElementById('lobbyModal');
+    const roomWaitingModal = document.getElementById('roomWaitingModal');
+    const largeRoomCodeDisplay = document.getElementById('largeRoomCodeDisplay');
+    const lobbyPlayerList = document.getElementById('lobbyPlayerList');
+    const playerCountDisplay = document.getElementById('playerCountDisplay');
+    const hostControls = document.getElementById('hostControls');
+    const guestWaitingNotice = document.getElementById('guestWaitingNotice');
+    const playerNameInput = document.getElementById('playerNameInput');
+    const roomCodeInput = document.getElementById('roomCodeInput');
+
+    document.querySelectorAll('#camoSelector .avatar-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#camoSelector .avatar-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        playerCamo = btn.dataset.camo;
+      });
+    });
+
+    document.querySelectorAll('#mapSelector .avatar-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#mapSelector .avatar-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        currentMap = MAPS[btn.dataset.map] || MAPS.jungle;
+      });
+    });
+
+    function generateRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    // CREATE ROOM (Shows large 4-letter code in Room Lobby!)
+    document.getElementById('createRoomBtn').addEventListener('click', async () => {
+      clearError();
+      playerName = playerNameInput.value.trim() || 'Trooper';
+      const code = generateRoomCode();
+      const createBtn = document.getElementById('createRoomBtn');
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating Room...';
+
+      // Set room state and display lobby with 4-letter code immediately!
+      currentRoomCode = code;
+      isRoomHost = true;
+      showRoomLobby(code, true);
+
+      try {
+        if (!fbDb) throw { code: 'DATABASE_NOT_INITIALIZED', message: 'Firebase Database not initialized. Please check network connection.' };
+
+        const roomRef = ref(fbDb, `rooms/${code}`);
+        const initialRoom = {
+          code,
+          hostId: localPlayerId,
+          hostName: playerName,
+          mapId: currentMap.id,
+          status: 'lobby',
+          createdAt: Date.now(),
+          players: {
+            [localPlayerId]: {
+              id: localPlayerId,
+              name: playerName,
+              color: '#3b82f6',
+              camo: playerCamo,
+              isHost: true,
+              joinedAt: Date.now()
+            }
+          }
+        };
+
+        // 10-second timeout
+        await withTimeout(set(roomRef, initialRoom), 10000, 'creating room');
+
+        // Setup disconnect cleanup for host
+        try {
+          const playerRef = ref(fbDb, `rooms/${code}/players/${localPlayerId}`);
+          onDisconnect(playerRef).remove();
+        } catch (e) {
+          console.warn('onDisconnect setup warning:', e);
+        }
+      } catch (err) {
+        console.error('Create room error:', err);
+        leaveRoom();
+        showError(err);
+      } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = 'Create Room';
+      }
+    });
+
+    // JOIN ROOM
+    document.getElementById('joinRoomBtn').addEventListener('click', async () => {
+      clearError();
+      playerName = playerNameInput.value.trim() || 'Trooper';
+      const code = roomCodeInput.value.trim().toUpperCase();
+      if (code.length !== 4) {
+        showError({ code: 'INVALID_CODE', message: 'Room code must be exactly 4 characters.' });
+        return;
+      }
+
+      const joinBtn = document.getElementById('joinRoomBtn');
+      joinBtn.disabled = true;
+      joinBtn.textContent = 'Joining...';
+
+      try {
+        if (!fbDb) throw { code: 'DATABASE_NOT_INITIALIZED', message: 'Firebase Database not initialized. Please check network connection.' };
+
+        const roomRef = ref(fbDb, `rooms/${code}`);
+        const snapshot = await withTimeout(get(roomRef), 10000, 'finding room');
+
+        if (!snapshot.exists()) {
+          throw { code: 'ROOM_NOT_FOUND', message: `Room "${code}" does not exist. Please check the code.` };
+        }
+
+        const roomData = snapshot.val();
+        if (roomData.mapId && MAPS[roomData.mapId]) currentMap = MAPS[roomData.mapId];
+
+        // Join room in Firebase
+        const playerRef = ref(fbDb, `rooms/${code}/players/${localPlayerId}`);
+        await withTimeout(set(playerRef, {
+          id: localPlayerId,
+          name: playerName,
+          color: '#ef4444',
+          camo: playerCamo,
+          isHost: false,
+          joinedAt: Date.now()
+        }), 10000, 'joining room');
+
+        try {
+          onDisconnect(playerRef).remove();
+        } catch (e) {
+          console.warn('onDisconnect setup warning:', e);
+        }
+
+        currentRoomCode = code;
+        isRoomHost = false;
+        showRoomLobby(code, false);
+      } catch (err) {
+        console.error('Join room error:', err);
+        showError(err);
+      } finally {
+        joinBtn.disabled = false;
+        joinBtn.textContent = 'Join Room';
+      }
+    });
+
+    // SHOW ROOM LOBBY (Large 4-Letter Code Display)
+    function showRoomLobby(code, isHost) {
+      gameState = 'lobby';
+      lobbyModal.style.display = 'none';
+      roomWaitingModal.style.display = 'flex';
+      largeRoomCodeDisplay.textContent = code;
+
+      if (isHost) {
+        hostControls.style.display = 'block';
+        guestWaitingNotice.style.display = 'none';
+      } else {
+        hostControls.style.display = 'none';
+        guestWaitingNotice.style.display = 'block';
+      }
+
+      // Populate local player immediately
+      playerCountDisplay.textContent = '1';
+      lobbyPlayerList.innerHTML = `
+        <div class="lobby-player-row">
+          <span style="display:flex; align-items:center; gap:6px;">
+            <span>🪖</span>
+            <span>${playerName}</span>
+            ${isHost ? '<span style="color:#facc15; font-size:10px;">👑 HOST</span>' : ''}
+          </span>
+          <span style="font-size:10px; color:#94a3b8; text-transform:uppercase;">${playerCamo}</span>
+        </div>
+      `;
+
+      // Listen to room updates in Firebase
+      if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
+      if (!fbDb) return;
+
+      let hasSeenRoomData = false;
+      const roomRef = ref(fbDb, `rooms/${code}`);
+      roomUnsubscribe = onValue(roomRef, (snapshot) => {
+        if (!snapshot.exists()) {
+          // If guest and room was previously confirmed but now deleted, return to menu
+          if (!isHost && hasSeenRoomData) {
+            leaveRoom();
+            showError({ code: 'ROOM_CLOSED', message: 'The host has closed this room.' });
+          }
+          return;
+        }
+
+        hasSeenRoomData = true;
+        const room = snapshot.val();
+        if (room.status === 'in_game' && gameState !== 'playing') {
+          // Transition into game arena
+          startMatch(code);
+          return;
+        }
+
+        // Update player list in lobby
+        if (room.players) {
+          const pList = Object.values(room.players);
+          playerCountDisplay.textContent = pList.length;
+          lobbyPlayerList.innerHTML = '';
+          pList.forEach(p => {
+            const row = document.createElement('div');
+            row.className = 'lobby-player-row';
+            row.innerHTML = `
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span>🪖</span>
+                <span>${p.name}</span>
+                ${p.isHost ? '<span style="color:#facc15; font-size:10px;">👑 HOST</span>' : ''}
+              </span>
+              <span style="font-size:10px; color:#94a3b8; text-transform:uppercase;">${p.camo}</span>
+            `;
+            lobbyPlayerList.appendChild(row);
+          });
+        }
+      });
+    }
+
+    // Copy Code Button
+    document.getElementById('copyCodeBtn').addEventListener('click', () => {
+      if (navigator.clipboard && currentRoomCode) {
+        navigator.clipboard.writeText(currentRoomCode);
+        document.getElementById('copyCodeBtn').textContent = '✅ Copied!';
+        setTimeout(() => { document.getElementById('copyCodeBtn').textContent = '📋 Copy Room Code'; }, 2000);
+      }
+    });
+
+    // Host Starts Match
+    document.getElementById('startMatchHostBtn').addEventListener('click', async () => {
+      if (!isRoomHost || !currentRoomCode || !fbDb) return;
+      try {
+        await withTimeout(set(ref(fbDb, `rooms/${currentRoomCode}/status`), 'in_game'), 10000, 'starting match');
+      } catch (err) {
+        showError(err);
+      }
+    });
+
+    // Leave Room
+    document.getElementById('leaveRoomBtn').addEventListener('click', leaveRoom);
+
+    function leaveRoom() {
+      if (roomUnsubscribe) { roomUnsubscribe(); roomUnsubscribe = null; }
+      if (currentRoomCode && fbDb) {
+        remove(ref(fbDb, `rooms/${currentRoomCode}/players/${localPlayerId}`)).catch(() => {});
+        if (isRoomHost) {
+          remove(ref(fbDb, `rooms/${currentRoomCode}`)).catch(() => {});
+        }
+      }
+      currentRoomCode = '';
+      isRoomHost = false;
+      gameState = 'menu';
+      roomWaitingModal.style.display = 'none';
+      lobbyModal.style.display = 'flex';
+      document.getElementById('roomBadgeCorner').style.display = 'none';
+    }
+
+    // Start Actual Gameplay
+    function startMatch(code) {
+      gameState = 'playing';
+      gameMode = 'multiplayer';
+      roomWaitingModal.style.display = 'none';
+      lobbyModal.style.display = 'none';
+
+      document.getElementById('roomBadgeCorner').style.display = 'flex';
+      document.getElementById('roomBadgeText').textContent = `ROOM: ${code}`;
+
+      players.clear();
+      bullets.length = 0;
+      particles.length = 0;
+      floatingTexts.length = 0;
+
+      const sp = isRoomHost ? currentMap.spawnPoints[0] : currentMap.spawnPoints[1 % currentMap.spawnPoints.length];
+      const localP = createPlayer(localPlayerId, playerName, isRoomHost ? '#3b82f6' : '#ef4444', playerCamo, sp.x, sp.y);
+      players.set(localPlayerId, localP);
+      updateHUDWeapon();
+
+      // Realtime state sync ~12 times/sec
+      const stateRef = ref(fbDb, `rooms/${code}/gameStates/${localPlayerId}`);
+      const syncInterval = setInterval(() => {
+        if (gameState === 'playing' && players.has(localPlayerId)) {
+          const p = players.get(localPlayerId);
+          update(stateRef, {
+            x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy),
+            aimAngle: Math.round(p.aimAngle * 100) / 100,
+            isCrouching: p.isCrouching, isJetpacking: p.isJetpacking, isDead: p.isDead,
+            health: p.health, camo: p.camo, name: p.name
+          }).catch(() => {});
+        } else {
+          clearInterval(syncInterval);
+        }
+      }, 80);
+
+      // Listen for other players in arena
+      onValue(ref(fbDb, `rooms/${code}/gameStates`), (snap) => {
+        if (snap.exists()) {
+          const states = snap.val();
+          Object.entries(states).forEach(([id, st]) => {
+            if (id !== localPlayerId) {
+              if (!players.has(id)) {
+                players.set(id, createPlayer(id, st.name || 'Opponent', '#ef4444', st.camo || 'crimson', st.x || 300, st.y || 400));
+              }
+              const target = players.get(id);
+              Object.assign(target, st);
+            }
+          });
+        }
+      });
+    }
+
+    // Play Survival Mode (Solo bot practice)
+    document.getElementById('playSurvivalBtn').addEventListener('click', () => {
+      playerName = playerNameInput.value.trim() || 'Trooper';
+      gameMode = 'survival';
+      gameState = 'playing';
+      lobbyModal.style.display = 'none';
+
+      document.getElementById('roomBadgeCorner').style.display = 'flex';
+      document.getElementById('roomBadgeText').textContent = 'SOLO SURVIVAL';
+
+      players.clear();
+      bullets.length = 0;
+      particles.length = 0;
+      floatingTexts.length = 0;
+
+      const sp = currentMap.spawnPoints[0];
+      const localP = createPlayer(localPlayerId, playerName, '#3b82f6', playerCamo, sp.x, sp.y);
+      players.set(localPlayerId, localP);
+      updateHUDWeapon();
+
+      // Spawn 3 Practice Doodle Bots
+      for (let i = 1; i <= 3; i++) {
+        const bSp = currentMap.spawnPoints[i % currentMap.spawnPoints.length];
+        const bot = createPlayer('bot_' + i, `DoodleBot #${i}`, '#dc2626', 'crimson', bSp.x, bSp.y);
+        bot.currentWeapon = i === 1 ? 'smg' : i === 2 ? 'shotgun' : 'rifle';
+        players.set(bot.id, bot);
+      }
+    });
+
+    // Play Again / Return to Lobby
+    document.getElementById('playAgainBtn').addEventListener('click', () => {
+      document.getElementById('gameOverModal').style.display = 'none';
+      document.getElementById('roomBadgeCorner').style.display = 'none';
+      lobbyModal.style.display = 'flex';
+      gameState = 'menu';
+    });
+
+    // Start Animation Loop
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
